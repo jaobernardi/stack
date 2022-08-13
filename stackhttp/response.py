@@ -7,15 +7,22 @@ import re
 from types import GeneratorType
 from typing import Union
 
-CODES = {
-    200: "OK",
-    400: "Bad Request",
-    401: "Unauthorized",
-    403: "Forbidden",
-    404: "Not Found",
-    500: "Internal Server Error",
-    501: "Not Implemented"
+__CODES = {
+    201: ("No Content"),
+    200: ("OK"),
+    400: ("Bad Request"),
+    401: ("Unauthorized"),
+    403: ("Forbidden"),
+    404: ("Not Found"),
+    500: ("Internal Server Error"),
+    501: ("Not Implemented")
 }
+
+def set_shortcut_content(self, code, page=None, json=None):
+    __CODES[code] = (*__CODES[code][0:2], page, json)
+
+def add_shortcut_code(self, code, status, page=None, json=None):
+    __CODES[code] = (code, status, page, json)
 
 
 @dataclass
@@ -23,9 +30,10 @@ class Response(object):
     headers: dict = field(default_factory=lambda: {"Server": "stack"})
     code: int = 200
     status: str = 'OK'
+    file_chunksize: int = 512
     data: Union[GeneratorType, bytes, str] = b''
     # Transform {key: value} into {sanitized_value: (key, value)}
-    shortcut_methods: dict = field(repr=False, default_factory=lambda: {re.sub("[^a-zA-Z ]*", "", value).lower().replace(" ", "_"): (key, value) for key, value in CODES.items()})
+    shortcut_methods: dict = field(repr=False, default_factory=lambda: {re.sub("[^a-zA-Z ]*", "", value[0]).lower().replace(" ", "_"): (key, *value) for key, value in __CODES.items()})
     
     def http(self):
         yield f"HTTP/1.1 {self.code} {self.status}".encode('utf-8')
@@ -42,9 +50,11 @@ class Response(object):
 
 
     @staticmethod
-    def file_generator(file: TextIOWrapper):
-        while data := file.read(1):
+    def file_generator(path, chunksize):
+        file = open(path, 'rb')
+        while data := file.read(chunksize):
             yield data
+        file.close()
 
     def define_content(self, content_type, content_length, content, encoding='utf-8'):
         self.headers['Content-Type'] = content_type
@@ -54,9 +64,6 @@ class Response(object):
         self.data = content
         return self
 
-    def add_shortcut_code(self, code, status):
-        sanitized_status = re.sub("[^a-zA-Z ]*", "", status).lower().replace(" ", "_")
-        self.shortcut_methods[sanitized_status] = (code, status)
 
     def define_code(self, code, status, page=None, json=None):
         self.code = code
@@ -64,13 +71,22 @@ class Response(object):
         if page:
             self.send_file(page)
         elif json:
-            self.send_json(json)
+            self.send_json(json) 
     
+    @staticmethod
+    def shortcut_wrapper(code, status, _page=None, _json=None, callback=None):
+        def wrapper(page=None, json=None):
+            page = page or _page
+            json = json or _json
+            return callback(code=code, status=status, page=page, json=json)
+        return wrapper
+
+
     def __getattribute__(self, name):
         # Implement dynamic code setting.
         _shortcut_methods = object.__getattribute__(self, "shortcut_methods")
         if name in _shortcut_methods:
-            return lambda page=None, json=None: self.define_code(*_shortcut_methods[name], page, json)
+            return self.shortcut_wrapper(*_shortcut_methods[name], callback=self.define_code)
         else:
             return object.__getattribute__(self, name)
 
@@ -81,12 +97,10 @@ class Response(object):
     def send_file(self, path, encoding=None):
         mime_type = mimetypes.guess_type(path)
 
-        file = open(path, 'rb')
-
         return self.define_content(
             mime_type[0],
             os.stat(path).st_size,
-            self.file_generator(file)
+            self.file_generator(path, self.file_chunksize)
         )
 
     def send_json(self, data):

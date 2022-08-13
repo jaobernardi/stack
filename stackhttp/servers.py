@@ -71,6 +71,7 @@ class SSLServer(Server):
 
 
 class HTTP(Server):
+
     def handle_connection(self, connection: socket.socket, address):
         # Init the request
         request = Request()
@@ -85,9 +86,12 @@ class HTTP(Server):
             # Append new data
             request.append_raw_data(new_data)
         
+        if not request.is_valid:
+            connection.close()
+
         # Call events
         if "http_request" not in pyding.event_space.global_event_space.events or not pyding.methods.global_event_space.get_handlers("http_request"):
-            response.send_file('assets/hello_world.html')
+            response.no_content()
         else:
             host = request.headers['Host'] if 'Host' in request.headers else None
             path = request.path

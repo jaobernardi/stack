@@ -17,6 +17,12 @@ class Request:
             query_string = query_string.decode("utf-8")
         return {unquote(k): unquote(v) for k, v in [i.split("=") for i in query_string.split("&") if "=" in i]}
 
+    @property
+    def is_valid(self):
+        if not self.method or not self.path or not self.raw_data:
+            return False
+        return True
+
     def parse_raw_data(self):
         self.method = None
         self.path = None
