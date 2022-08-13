@@ -7,22 +7,22 @@ import re
 from types import GeneratorType
 from typing import Union
 
-__CODES = {
-    201: ("No Content"),
-    200: ("OK"),
-    400: ("Bad Request"),
-    401: ("Unauthorized"),
-    403: ("Forbidden"),
-    404: ("Not Found"),
-    500: ("Internal Server Error"),
-    501: ("Not Implemented")
+CODES = {
+    201: ("No Content",),
+    200: ("OK",),
+    400: ("Bad Request",),
+    401: ("Unauthorized",),
+    403: ("Forbidden",),
+    404: ("Not Found",),
+    500: ("Internal Server Error",),
+    501: ("Not Implemented",)
 }
 
 def set_shortcut_content(self, code, page=None, json=None):
-    __CODES[code] = (*__CODES[code][0:2], page, json)
+    CODES[code] = (*CODES[code][0:2], page, json)
 
 def add_shortcut_code(self, code, status, page=None, json=None):
-    __CODES[code] = (code, status, page, json)
+    CODES[code] = (code, status, page, json)
 
 
 @dataclass
@@ -33,7 +33,7 @@ class Response(object):
     file_chunksize: int = 512
     data: Union[GeneratorType, bytes, str] = b''
     # Transform {key: value} into {sanitized_value: (key, value)}
-    shortcut_methods: dict = field(repr=False, default_factory=lambda: {re.sub("[^a-zA-Z ]*", "", value[0]).lower().replace(" ", "_"): (key, *value) for key, value in __CODES.items()})
+    shortcut_methods: dict = field(repr=False, default_factory=lambda: {re.sub("[^a-zA-Z ]*", "", value[0]).lower().replace(" ", "_"): (key, *value) for key, value in CODES.items()})
     
     def http(self):
         yield f"HTTP/1.1 {self.code} {self.status}".encode('utf-8')
